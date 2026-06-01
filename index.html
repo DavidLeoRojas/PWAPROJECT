@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#6366f1">
+  <title>Censo de Mascotas — Iniciar Sesión</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+    <script>
+      // Configurar la base de la API para que el frontend apunte a los endpoints remotos
+      // Cambia la URL abajo por la que te enviaron (sin slash final)
+      window.__API_BASE__ = 'https://elprofehugo.online/api/v1';
+    </script>
+  <div id="offline-bar"> Sin conexión — Modo offline activo</div>
+
+  <div class="login-page">
+    <div class="login-box">
+      <div class="login-logo">
+        <h1><i class="fa-solid fa-map-location-dot"></i></i> <span>Censo</span>Mascotas<i class="fa-solid fa-paw"></i></h1></i>
+        <p>Sistema de registro censal de animales</p>
+      </div>
+
+      <div class="card">
+        <div id="alert-container"></div>
+
+        <form id="login-form">
+          <div class="form-group">
+            <label for="usuario">Usuario</label>
+            <input type="text" id="usuario" name="usuario"
+                   placeholder="tu_usuario" autocomplete="username" required>
+          </div>
+          <div class="form-group">
+            <label for="contrasena">Contraseña</label>
+            <input type="password" id="contrasena" name="contrasena"
+                   placeholder="••••••••" autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full" id="btn-login">
+            Iniciar sesión
+          </button>
+        </form>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0">
+
+        <p style="font-size:0.8rem;color:var(--text-muted);text-align:center">
+          ¿No tienes cuenta?
+          <a href="pages/registro.html" style="color:var(--accent)">Regístrate aquí</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth.js?v=3"></script>
+  <script src="js/sync.js?v=3"></script>
+  <script>
+    // Si ya tiene sesión, redirigir al mapa
+    if (tokenValido()) window.location.href = 'pages/mapa.html';
+
+    // Registrar Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .then(() => console.log('Service Worker registrado'))
+        .catch(err => console.error('SW error:', err));
+    }
+
+    inicializarMonitorRed();
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-login');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Entrando...';
+
+      try {
+        await login(
+          document.getElementById('usuario').value.trim(),
+          document.getElementById('contrasena').value
+        );
+        const usuario = obtenerUsuario();
+        if (usuario && usuario.rol === 'ADMIN') {
+          window.location.href = 'pages/mapa.html';
+        } else {
+          window.location.href = 'pages/mapa.html'; // Dueños también van al mapa
+        }
+      } catch (err) {
+        mostrarAlerta(err.message, 'danger');
+        btn.disabled = false;
+        btn.textContent = 'Iniciar sesión';
+      }
+    });
+  </script>
+</body>
+</html>

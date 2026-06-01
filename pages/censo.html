@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#6366f1">
+  <title>Censo de Mascotas — Nuevo Censo</title>
+  <link rel="manifest" href="../manifest.json">
+  <link rel="stylesheet" href="../css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+  <div id="offline-bar"><i class="fa-solid fa-wifi-slash"></i> Sin conexión — Censo se guardará localmente</div>
+
+  <nav class="navbar">
+    <a href="mapa.html" class="navbar-brand">><i class="fa-solid fa-map-location-dot"></i> <span>Censo</span>Mascotas<i class="fa-solid fa-paw"></i> </a></i>
+    <ul class="navbar-nav">
+      <li><a href="personas.html" class="nav-link">Personas</a></li>
+      <li><a href="duenos.html" class="nav-link">Dueños</a></li>
+      <li><a href="mascotas.html" class="nav-link">Mascotas</a></li>
+      <li><a href="censo.html"    class="nav-link active">Censo</a></li>
+      <li><a href="mapa.html"     class="nav-link">Mapa</a></li>
+    </ul>
+    <span class="nav-user" id="nav-user-name"></span>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Nuevo Censo</h1>
+      <p>Asocia una mascota con su dueño y captura la ubicación actual</p>
+    </div>
+
+    <div id="alert-container"></div>
+
+    <div class="card">
+      <form id="form-censo">
+
+        <!-- DUEÑO -->
+        <h3 style="font-size:0.9rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1rem">
+          1. Seleccionar dueño
+        </h3>
+        <div class="form-group">
+          <label for="sel-dueno">Dueño de la mascota *</label>
+          <select id="sel-dueno" required>
+            <option value="">— Cargando personas... —</option>
+          </select>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0">
+
+        <!-- MASCOTA -->
+        <h3 style="font-size:0.9rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1rem">
+          2. Seleccionar mascota
+        </h3>
+        <div class="form-group">
+          <label for="sel-mascota">Mascota a censar *</label>
+          <select id="sel-mascota" required>
+            <option value="">— Cargando mascotas... —</option>
+          </select>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0">
+
+        <!-- FOTO -->
+        <h3 style="font-size:0.9rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1rem">
+          3. Fotografía del censo (máx. 50 KB)
+        </h3>
+        <div class="form-group">
+          <label for="foto-censo">Capturar o adjuntar foto</label>
+          <div style="display:flex;gap:0.5rem;align-items:center">
+            <input type="file" id="foto-censo" accept="image/*" capture="environment">
+            <button type="button" id="btn-tomar-foto" class="btn btn-secondary">Tomar foto</button>
+          </div>
+          <img id="foto-preview" class="foto-preview" alt="Vista previa">
+          <span class="foto-info" id="foto-info">Se comprimirá automáticamente a ≤ 50 KB</span>
+        </div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0">
+
+        <!-- UBICACIÓN -->
+        <h3 style="font-size:0.9rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1rem">
+          4. Ubicación actual
+        </h3>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Latitud</label>
+            <input type="text" id="coord-lat" readonly placeholder="—" style="font-family:var(--font-mono)">
+          </div>
+          <div class="form-group">
+            <label>Longitud</label>
+            <input type="text" id="coord-lon" readonly placeholder="—" style="font-family:var(--font-mono)">
+          </div>
+        </div>
+        <div style="margin-bottom:0.75rem">
+          <span style="font-size:0.8rem;color:var(--text-muted)">Precisión: </span>
+          <span id="coord-accuracy" style="font-size:0.8rem;color:var(--text-muted)">—</span>
+        </div>
+        <button type="button" class="btn btn-secondary" id="btn-ubicacion" style="margin-bottom:1.25rem">
+          <i class="fa-solid fa-location-dot"></i> Obtener ubicación GPS
+        </button>
+
+        <div id="info-proyecto" class="alert alert-info" style="margin-bottom:1.25rem"></div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="btn-censo">
+          Registrar censo
+        </button>
+        <div style="margin-top:0.75rem;text-align:center">
+          <span id="badge-pendientes" class="badge badge-offline" style="display:none"></span>
+        </div>
+        <!-- Botón de notificaciones push -->
+        <div id="notif-btn-container" style="margin-top:0.5rem"></div>
+      </form>
+    </div>
+  </div>
+
+  <script src="../js/auth.js?v=3"></script>
+  <script src="../js/api.js?v=4"></script>
+  <script src="../js/geo.js?v=3"></script>
+  <script src="../js/camera.js?v=3"></script>
+  <script src="../js/sync.js?v=3"></script>
+  <script src="../js/notificaciones.js?v=2"></script>
+  <script>
+    requiereAuth();
+    if (!esAdmin()) {
+      window.location.href = 'mapa.html';
+    }
+    mostrarUsuarioNavbar();
+    inicializarMonitorRed();
+    initIndexedDB().then(actualizarBadgePendientes).catch(console.error);
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(console.error);
+    inicializarCampoFoto('foto-censo', 'foto-preview', 'foto-info');
+
+    // Inicializar botón de notificaciones push
+    navigator.serviceWorker.ready.then(() => initNotificaciones('notif-btn-container')).catch(console.warn);
+
+    // Mostrar config del proyecto
+    const cfg = getProyectoConfig();
+    document.getElementById('info-proyecto').innerHTML =
+      `Proyecto: <strong>${cfg.idProyecto}</strong> &nbsp;|&nbsp; Color: <span style="display:inline-block;width:14px;height:14px;background:${cfg.color};border-radius:3px;vertical-align:middle"></span> <strong>${cfg.color}</strong>`;
+
+    // Cargar personas y mascotas en los selects
+    initIndexedDB().then(async () => {
+      actualizarBadgePendientes();
+      await Promise.all([cargarPersonas(), cargarMascotas()]);
+    });
+
+    async function cargarPersonas() {
+      const sel = document.getElementById('sel-dueno');
+      try {
+        const personas = await obtenerPersonas('DUENO');
+        sel.innerHTML = '<option value="">— Selecciona un dueño —</option>' +
+          personas.map(p => `<option value="${p.id}">${p.nombres} ${p.apellidos} — ${p.documento || p.ciudad || ''}</option>`).join('');
+      } catch {
+        sel.innerHTML = '<option value="">Sin conexión — ingresa ID manualmente</option>';
+      }
+    }
+
+    async function cargarMascotas() {
+      const sel = document.getElementById('sel-mascota');
+      try {
+        const mascotas = await obtenerMascotas();
+        const tipos = { PERRO:'Perro', GATO:'Gato', PAJARO:'Pájaro', CONEJO:'Conejo', HAMSTER:'Hámster', PEZ:'Pez', REPTIL:'Reptil', OTRO:'Otro' };
+        sel.innerHTML = '<option value="">— Selecciona una mascota —</option>' +
+          mascotas.map(m => `<option value="${m.id}">${tipos[m.tipo] || 'Otro'} ${m.nombre} (${m.tipo})</option>`).join('');
+      } catch {
+        sel.innerHTML = '<option value="">Sin conexión</option>';
+      }
+    }
+
+    // Botón de ubicación
+    document.getElementById('btn-ubicacion').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-ubicacion');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Obteniendo GPS...';
+      try {
+        const pos = await obtenerUbicacion();
+        mostrarCoordenadas(pos.lat, pos.lon, pos.accuracy);
+        mostrarAlerta(`Ubicación obtenida (precisión: ±${Math.round(pos.accuracy)}m)`, 'success');
+      } catch (err) {
+        mostrarAlerta(err.message, 'danger');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Obtener ubicación GPS';
+      }
+    });
+
+    // Envío del formulario
+    document.getElementById('form-censo').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const ubi = getUltimaUbicacion();
+      if (!ubi) {
+        mostrarAlerta('Debes obtener la ubicación GPS antes de guardar el censo', 'danger');
+        return;
+      }
+
+      const fotoInput = document.getElementById('foto-censo');
+      const fotografia = fotoInput.dataset.base64 || null;
+
+      const btn = document.getElementById('btn-censo');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Registrando censo...';
+
+      const datos = {
+        id:        crypto.randomUUID(),
+        idMascota: document.getElementById('sel-mascota').value,
+        idDueno:   document.getElementById('sel-dueno').value,
+        fotografia,
+        lat:       ubi.lat,
+        lon:       ubi.lon,
+      };
+
+      if (navigator.onLine) {
+        try {
+          const resultado = await crearCenso(datos);
+          if (resultado?.pendiente) {
+            mostrarAlerta('Sin conexión — Censo guardado localmente y pendiente de sincronización', 'warning');
+          } else {
+            mostrarAlerta('Censo registrado correctamente. El mapa se ha actualizado.', 'success');
+          }
+          e.target.reset();
+          delete fotoInput.dataset.base64;
+          document.getElementById('foto-preview').classList.remove('visible');
+          document.getElementById('coord-lat').value = '';
+          document.getElementById('coord-lon').value = '';
+        } catch (err) {
+          mostrarAlerta(err.message, 'danger');
+        }
+      } else {
+        const config = getProyectoConfig();
+        await guardarEnCola(STORES.CENSOS, { ...datos, ...config });
+        mostrarAlerta('Sin conexión — Censo guardado localmente (se enviará automáticamente al recuperar la red)', 'warning');
+        e.target.reset();
+        actualizarBadgePendientes();
+      }
+
+    });
+
+    // Handler para "Tomar foto": abrir cámara en un modal simple
+    document.getElementById('btn-tomar-foto').addEventListener('click', async () => {
+      // Crear elementos temporales
+      const modal = document.createElement('div');
+      modal.className = 'modal';
+      modal.innerHTML = `
+        <div class="modal-content">
+          <video id="cam-video" autoplay playsinline style="width:100%;height:auto;border-radius:6px"></video>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="cam-capture" class="btn btn-primary">Capturar</button>
+            <button id="cam-close" class="btn btn-secondary">Cerrar</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+
+      const video = document.getElementById('cam-video');
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      video.srcObject = stream;
+
+      document.getElementById('cam-capture').addEventListener('click', async () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
+        try {
+          const resultado = await comprimirImagen(blob);
+          const input = document.getElementById('foto-censo');
+          input.dataset.base64 = resultado.base64;
+          const preview = document.getElementById('foto-preview');
+          preview.src = resultado.base64;
+          preview.classList.add('visible');
+          document.getElementById('foto-info').textContent = `OK ${formatearBytes(resultado.bytes)} — Calidad: ${resultado.quality}%`;
+        } catch (err) {
+          mostrarAlerta(err.message, 'danger');
+        }
+        // detener cámara y cerrar modal
+        stream.getTracks().forEach(t => t.stop());
+        modal.remove();
+      });
+
+      document.getElementById('cam-close').addEventListener('click', () => {
+        stream.getTracks().forEach(t => t.stop());
+        modal.remove();
+      });
+    });
+  </script>
+</body>
+</html>

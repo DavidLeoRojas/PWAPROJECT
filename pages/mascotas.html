@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#6366f1">
+  <title>Censo de Mascotas — Mascotas</title>
+  <link rel="manifest" href="../manifest.json">
+  <link rel="stylesheet" href="../css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+  <div id="offline-bar"><i class="fa-solid fa-wifi-slash"></i> Sin conexión — Datos se guardarán localmente</div>
+
+  <nav class="navbar">
+    <a href="mapa.html" class="navbar-brand"><i class="fa-solid fa-map-location-dot"></i> <span>Censo</span>Mascotas<i class="fa-solid fa-paw"></i></a></i>
+    <ul class="navbar-nav">
+      <li><a href="personas.html" class="nav-link">Personas</a></li>
+      <li><a href="duenos.html" class="nav-link">Dueños</a></li>
+      <li><a href="mascotas.html" class="nav-link active">Mascotas</a></li>
+      <li><a href="censo.html"    class="nav-link">Censo</a></li>
+      <li><a href="mapa.html"     class="nav-link">Mapa</a></li>
+    </ul>
+    <span class="nav-user" id="nav-user-name"></span>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Registro de Mascotas</h1>
+      <p>Registra los datos biográficos de la mascota</p>
+    </div>
+
+    <div id="alert-container"></div>
+
+    <div class="card">
+      <form id="form-mascota">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="nombre">Nombre de la mascota *</label>
+            <input type="text" id="nombre" placeholder="Firulais" required>
+          </div>
+          <div class="form-group">
+            <label for="tipo">Especie *</label>
+            <select id="tipo" required>
+              <option value="">— Selecciona —</option>
+              <option value="PERRO">Perro</option>
+              <option value="GATO">Gato</option>
+              <option value="PAJARO">Pájaro</option>
+              <option value="CONEJO">Conejo</option>
+              <option value="HAMSTER">Hámster</option>
+              <option value="PEZ">Pez</option>
+              <option value="REPTIL">Reptil</option>
+              <option value="OTRO">Otro</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="genero">Género</label>
+            <select id="genero">
+              <option value="MACHO">Macho</option>
+              <option value="HEMBRA">Hembra</option>
+              <option value="DESCONOCIDO">Desconocido</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="edad">Edad (años)</label>
+            <input type="number" id="edad" placeholder="3.5" min="0" max="30" step="0.5">
+          </div>
+          <div class="form-group">
+            <label for="foto-mascota">Foto de la mascota</label>
+            <input type="file" id="foto-mascota" accept="image/*" capture="environment">
+            <img id="foto-mascota-preview" class="foto-preview" alt="Vista previa de la mascota">
+            <span class="foto-info" id="foto-mascota-info">Tu foto se comprimirá automáticamente a ≤ 50 KB</span>
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label for="fotografia-url">O URL de fotografía de perfil</label>
+            <input type="url" id="fotografia-url" placeholder="https://ejemplo.com/imagen.jpg">
+            <small style="color:var(--text-muted);font-size:0.78rem">
+              Si no usas la cámara, puedes ingresar una URL de imagen. El valor de cámara tiene prioridad.
+            </small>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.75rem;margin-top:0.5rem">
+          <button type="submit" class="btn btn-primary" id="btn-guardar">
+            Guardar mascota
+          </button>
+          <button type="reset" class="btn btn-secondary">Limpiar</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Lista -->
+    <div style="margin-top:2rem">
+      <h2 style="font-size:1.1rem;margin-bottom:1rem;color:var(--text-secondary)">
+        Mascotas registradas
+        <span id="badge-pendientes" class="badge badge-offline" style="display:none"></span>
+      </h2>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div id="tabla-mascotas" style="overflow-x:auto">
+          <p style="padding:1.5rem;color:var(--text-muted);text-align:center">Cargando...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/auth.js?v=3"></script>
+  <script src="../js/api.js?v=4"></script>
+  <script src="../js/camera.js?v=3"></script>
+  <script src="../js/sync.js?v=3"></script>
+  <script>
+    requiereAuth();
+    if (!esAdmin()) {
+      window.location.href = 'mapa.html';
+    }
+    mostrarUsuarioNavbar();
+    inicializarMonitorRed();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(console.error);
+    inicializarCampoFoto('foto-mascota', 'foto-mascota-preview', 'foto-mascota-info');
+    initIndexedDB().then(cargarMascotas);
+
+    async function cargarMascotas() {
+      const contenedor = document.getElementById('tabla-mascotas');
+      try {
+        const mascotas = await obtenerMascotas();
+        if (mascotas.length === 0) {
+          contenedor.innerHTML = '<p style="padding:1.5rem;color:var(--text-muted);text-align:center">No hay mascotas registradas</p>';
+          return;
+        }
+        const tipos = { PERRO:'Perro', GATO:'Gato', PAJARO:'Pájaro', CONEJO:'Conejo', HAMSTER:'Hámster', PEZ:'Pez', REPTIL:'Reptil', OTRO:'Otro' };
+        contenedor.innerHTML = `
+          <table class="data-table">
+            <thead>
+              <tr><th>Nombre</th><th>Tipo</th><th>Género</th><th>Edad</th></tr>
+            </thead>
+            <tbody>
+              ${mascotas.map(m => `
+                <tr>
+                  <td>${m.nombre}</td>
+                  <td>${tipos[m.tipo] || 'Otro'} ${m.tipo}</td>
+                  <td>${m.genero || '—'}</td>
+                  <td>${m.edad != null ? m.edad + ' años' : '—'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>`;
+      } catch {
+        contenedor.innerHTML = '<p style="padding:1.5rem;color:var(--text-muted);text-align:center">Sin conexión</p>';
+      }
+      actualizarBadgePendientes();
+    }
+
+    document.getElementById('form-mascota').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-guardar');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando...';
+
+      const rawTipo = document.getElementById('tipo').value;
+      const tipo = ['GATO', 'PERRO', 'PAJARO', 'OTRO'].includes(rawTipo) ? rawTipo : 'OTRO';
+      const fotoUrl = document.getElementById('fotografia-url').value.trim();
+      const fotoInput = document.getElementById('foto-mascota');
+      const fotoBase64 = fotoInput?.dataset?.base64;
+
+      const datos = {
+        id:     crypto.randomUUID(),
+        nombre: document.getElementById('nombre').value.trim(),
+        tipo,
+        genero: document.getElementById('genero').value,
+        edad:   document.getElementById('edad').value ? parseFloat(document.getElementById('edad').value) : undefined,
+      };
+
+      if (fotoBase64) {
+        datos.fotografia = fotoBase64;
+      } else if (fotoUrl) {
+        if (fotoUrl.length > 500) {
+          mostrarAlerta('La URL de la fotografía no puede superar 500 caracteres.', 'danger');
+          btn.disabled = false;
+          btn.textContent = 'Guardar mascota';
+          return;
+        }
+        try {
+          new URL(fotoUrl);
+          datos.fotografia = fotoUrl;
+        } catch {
+          mostrarAlerta('La URL de la fotografía no es válida.', 'danger');
+          btn.disabled = false;
+          btn.textContent = 'Guardar mascota';
+          return;
+        }
+      }
+
+      if (navigator.onLine) {
+        try {
+          const resultado = await crearMascota(datos);
+          if (resultado?.pendiente) {
+            mostrarAlerta('Sin conexión — Mascota guardada localmente y pendiente de sincronización', 'warning');
+          } else {
+            mostrarAlerta('Mascota registrada correctamente', 'success');
+          }
+          e.target.reset();
+          cargarMascotas();
+        } catch (err) {
+          mostrarAlerta(err.message, 'danger');
+        }
+      } else {
+        await guardarEnCola(STORES.MASCOTAS, datos);
+        mostrarAlerta('Sin conexión — Mascota guardada localmente', 'warning');
+        e.target.reset();
+        actualizarBadgePendientes();
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Guardar mascota';
+    });
+  </script>
+</body>
+</html>

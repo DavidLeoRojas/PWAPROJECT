@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#6366f1">
+  <title>Censo de Mascotas — Mapa</title>
+  <link rel="manifest" href="../manifest.json">
+  <link rel="stylesheet" href="../css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    body, html { height: 100%; overflow: hidden; }
+    .map-wrapper { position: relative; height: calc(100vh - 60px); }
+    #map { width: 100%; height: 100%; background: #1e293b; }
+
+    .info-panel {
+      position: absolute; bottom: 1rem; left: 50%;
+      transform: translateX(-50%);
+      width: min(420px, calc(100vw - 2rem));
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 1.25rem; display: none; z-index: 1000;
+      max-height: 65vh; overflow-y: auto;
+    }
+    .info-panel.visible { display: block; }
+    .info-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .info-panel h3 { font-size: 1rem; }
+    .info-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.3rem; }
+    .info-close:hover { color: var(--text-primary); }
+    .info-foto { width: 100%; max-height: 180px; object-fit: cover; border-radius: var(--radius-sm); margin-bottom: 1rem; border: 1px solid var(--border); }
+    .info-field { display: flex; gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.4rem; color: var(--text-secondary); }
+    .info-field strong { color: var(--text-primary); min-width: 80px; }
+    .info-section-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin: 0.75rem 0 0.4rem; }
+    .color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: middle; margin-right: 4px; }
+
+    .map-controls { position: absolute; top: 1rem; right: 1rem; z-index: 1000; display: flex; flex-direction: column; gap: 0.5rem; }
+    .map-btn { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); cursor: pointer; font-family: var(--font-body); font-size: 0.82rem; font-weight: 500; padding: 0.5rem 0.9rem; white-space: nowrap; transition: all 0.2s; box-shadow: var(--shadow); }
+    .map-btn:hover { background: var(--accent-light); border-color: var(--accent); }
+
+    .map-contador { position: absolute; top: 1rem; left: 1rem; z-index: 1000; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.5rem 0.9rem; font-size: 0.82rem; color: var(--text-secondary); box-shadow: var(--shadow); }
+
+    .leaflet-popup-content-wrapper { background: var(--bg-card) !important; color: var(--text-primary) !important; border: 1px solid var(--border) !important; border-radius: var(--radius-sm) !important; }
+    .leaflet-popup-tip { background: var(--bg-card) !important; }
+    .leaflet-popup-content { margin: 10px 14px !important; font-size: 0.85rem; }
+    #offline-bar { position: relative; z-index: 2000; }
+    #alert-container { position: absolute; bottom: 5rem; left: 50%; transform: translateX(-50%); z-index: 2000; width: min(400px, calc(100vw - 2rem)); }
+  </style>
+</head>
+<body>
+  <div id="offline-bar"><i class="fa-solid fa-wifi-slash"></i> Sin conexión — Mostrando datos del caché</div>
+
+  <nav class="navbar">
+    <a href="mapa.html" class="navbar-brand"><i class="fa-solid fa-map-location-dot"></i></i> <span>Censo</span>Mascotas<i class="fa-solid fa-paw"></i> </a>
+    <ul class="navbar-nav">
+      <li><a href="personas.html" class="nav-link">Personas</a></li>
+      <li><a href="duenos.html" class="nav-link">Dueños</a></li>
+      <li><a href="mascotas.html" class="nav-link">Mascotas</a></li>
+      <li><a href="censo.html"    class="nav-link">Censo</a></li>
+      <li><a href="mapa.html"     class="nav-link active">Mapa</a></li>
+    </ul>
+    <div style="display:flex;align-items:center;gap:0.75rem">
+      <span class="nav-user" id="nav-user-name"></span>
+      <button onclick="cerrarSesion()" class="btn btn-secondary" style="padding:0.3rem 0.75rem;font-size:0.8rem">Salir</button>
+    </div>
+  </nav>
+
+  <div class="map-wrapper">
+    <div id="map"></div>
+    <div id="alert-container"></div>
+    <div class="map-contador" id="mapa-contador">Cargando censos...</div>
+    <div class="map-controls">
+      <button class="map-btn" onclick="window.location.href='censo.html'">+ Nuevo censo</button>
+      <button class="map-btn" onclick="cargarCensos()">↺ Actualizar</button>
+      <button class="map-btn" id="btn-push"><i class="fa-solid fa-bell"></i> Activar alertas</button>
+    </div>
+
+    <div class="info-panel" id="info-panel">
+      <div class="info-panel-header">
+        <h3 id="info-titulo">Detalle del censo</h3>
+        <button class="info-close" onclick="cerrarPanel()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <img id="info-foto" class="info-foto" style="display:none" alt="Foto del censo">
+      <div id="info-contenido"></div>
+    </div>
+  </div>
+
+  <script src="../js/auth.js?v=3"></script>
+  <script src="../js/api.js?v=4"></script>
+  <script src="../js/sync.js?v=3"></script>
+  <script src="../js/notificaciones.js?v=2"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    requiereAuth();
+    mostrarUsuarioNavbar();
+    inicializarMonitorRed();
+    // Una sola llamada inicial — cargarCensos ya lee los params de la URL
+    initIndexedDB().then(cargarCensos).catch(console.error);
+
+    // Cuando el SW nos navega hacia aquí (click en notificación push),
+    // recargamos los censos para procesar el nuevo ?censoId en la URL.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (e) => {
+        if (e.data?.tipo === 'NAVIGATE' || e.data?.tipo === 'SYNC_REQUIRED') {
+          cargarCensos();
+        }
+      });
+    }
+
+    // ── Mapa con Leaflet + OpenStreetMap (100% gratis, sin API key) ───────────
+    const map = L.map('map', { center: [4.5709, -74.2973], zoom: 6 });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+      errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=',
+    }).addTo(map);
+
+    let marcadores = [];
+
+    function crearIcono(color) {
+      return L.divIcon({
+        className: '',
+        html: `<div style="width:22px;height:22px;background:${color};border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>`,
+        iconSize: [22, 22], iconAnchor: [11, 11],
+      });
+    }
+
+    async function cargarCensos() {
+      document.getElementById('mapa-contador').textContent = 'Cargando...';
+      marcadores.forEach(m => map.removeLayer(m));
+      marcadores = [];
+
+      // Si venimos desde una notificación push, resaltar ese censo
+      const params  = new URLSearchParams(location.search);
+      const censoIdDestino = params.get('censoId');
+
+      try {
+        const censos = await obtenerCensos();
+        document.getElementById('mapa-contador').textContent =
+          `${censos.length} censo${censos.length !== 1 ? 's' : ''} en el mapa`;
+
+        if (censos.length === 0) return;
+
+        const bounds = [];
+        let marcadorDestino = null;
+        let censoDestino    = null;
+
+        censos.forEach(censo => {
+          const lat = parseFloat(censo.lat), lon = parseFloat(censo.lon);
+          const color = censo.color || '#6366f1';
+          const esDestino = censoIdDestino && (String(censo.id) === censoIdDestino || String(censo._id) === censoIdDestino);
+          const marker = L.marker([lat, lon], { icon: crearIcono(color) });
+          marker.bindPopup(`<strong>${censo.mascota?.nombre || 'Mascota'}</strong><br><span style="color:#94a3b8;font-size:0.8rem">${censo.mascota?.tipo || ''}</span>`);
+          marker.on('click', () => mostrarInfoPanel(censo));
+          marker.addTo(map);
+          marcadores.push(marker);
+          bounds.push([lat, lon]);
+          if (esDestino) { marcadorDestino = marker; censoDestino = censo; }
+        });
+
+        // Si hay un censo destino (desde notificación), centrarlo y abrirlo
+        if (marcadorDestino && censoDestino) {
+          map.setView([parseFloat(censoDestino.lat), parseFloat(censoDestino.lon)], 17);
+          marcadorDestino.openPopup();
+          mostrarInfoPanel(censoDestino);
+        } else if (bounds.length === 1) {
+          map.setView(bounds[0], 16);
+        } else {
+          map.fitBounds(bounds, { padding: [40, 40] });
+        }
+
+      } catch (err) {
+        document.getElementById('mapa-contador').textContent = 'Error cargando censos';
+      }
+    }
+
+    function mostrarInfoPanel(censo) {
+      const foto = document.getElementById('info-foto');
+      const m = censo.mascota || {}, d = censo.dueno || {};
+      document.getElementById('info-titulo').textContent = `${m.nombre || 'Mascota'} — ${m.tipo || ''}`;
+      foto.style.display = censo.fotografiaCenso ? 'block' : 'none';
+      if (censo.fotografiaCenso) foto.src = censo.fotografiaCenso;
+
+      document.getElementById('info-contenido').innerHTML = `
+        <div class="info-section-title"><i class="fa-solid fa-map-location-dot"></i><i class="fa-solid fa-paw"></i> Mascota</div>
+        <div class="info-field"><strong>Nombre</strong>${m.nombre || '—'}</div>
+        <div class="info-field"><strong>Tipo</strong>${m.tipo || '—'}</div>
+        <div class="info-field"><strong>Género</strong>${m.genero || '—'}</div>
+        <div class="info-field"><strong>Edad</strong>${m.edad != null ? m.edad + ' años' : '—'}</div>
+        <div class="info-section-title"><i class="fa-solid fa-user"></i> Dueño</div>
+        <div class="info-field"><strong>Nombre</strong>${d.nombres || ''} ${d.apellidos || ''}</div>
+        <div class="info-field"><strong>Teléfono</strong>${d.telefono || '—'}</div>
+        <div class="info-field"><strong>Ciudad</strong>${d.ciudad || '—'}</div>
+        <div class="info-section-title"><i class="fa-solid fa-location-dot"></i> Censo</div>
+        <div class="info-field"><strong>Lat</strong><span style="font-family:var(--font-mono);font-size:0.8rem">${parseFloat(censo.lat).toFixed(6)}</span></div>
+        <div class="info-field"><strong>Lon</strong><span style="font-family:var(--font-mono);font-size:0.8rem">${parseFloat(censo.lon).toFixed(6)}</span></div>
+        <div class="info-field"><strong>Proyecto</strong>${censo.idProyecto || '—'}</div>
+        <div class="info-field"><strong>Color</strong><span class="color-dot" style="background:${censo.color}"></span>${censo.color || '—'}</div>
+        <div class="info-field"><strong>Fecha</strong>${censo.creado_en ? new Date(censo.creado_en).toLocaleString('es-CO') : '—'}</div>
+      `;
+      document.getElementById('info-panel').classList.add('visible');
+    }
+
+    function cerrarPanel() {
+      document.getElementById('info-panel').classList.remove('visible');
+    }
+
+    map.on('click', cerrarPanel);
+
+    async function actualizarEstadoPush() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      try {
+        const sub = await getSuscripcionActiva();
+        const btn = document.getElementById('btn-push');
+        if (sub) {
+          btn.innerHTML   = '<i class="fa-solid fa-bell"></i> Alertas activas';
+          btn.dataset.activo = 'true';
+        } else {
+          btn.innerHTML   = '<i class="fa-solid fa-bell-slash"></i> Activar alertas';
+          btn.dataset.activo = 'false';
+        }
+      } catch (err) {
+        console.warn('No se pudo comprobar el estado de push:', err);
+      }
+    }
+
+    document.getElementById('btn-push').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-push');
+      btn.disabled = true;
+      try {
+        if (btn.dataset.activo === 'true') {
+          // Desactivar
+          const sub = await getSuscripcionActiva();
+          if (sub) await sub.unsubscribe();
+          mostrarAlerta('Notificaciones desactivadas', 'info');
+        } else {
+          // Activar
+          if (!('Notification' in window)) { mostrarAlerta('Tu navegador no soporta notificaciones', 'warning'); return; }
+          const permiso = await Notification.requestPermission();
+          if (permiso !== 'granted') { mostrarAlerta('Permiso denegado', 'warning'); return; }
+          const vapidKey = await obtenerVapidPublicKey();
+          if (!vapidKey || vapidKey.startsWith('REEMPLAZA')) {
+            mostrarAlerta('Configura las VAPID keys en el .env del servidor', 'warning'); return;
+          }
+          const sw  = await navigator.serviceWorker.ready;
+          const sub = await sw.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidKey) });
+          await suscribirPush(sub.toJSON());
+          mostrarAlerta('¡Notificaciones activadas! Recibirás alertas de nuevos censos.', 'success');
+        }
+      } catch (err) {
+        mostrarAlerta('Error: ' + err.message, 'danger');
+      } finally {
+        btn.disabled = false;
+        await actualizarEstadoPush();
+      }
+    });
+
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(console.error);
+    actualizarEstadoPush();
+  </script>
+</body>
+</html>

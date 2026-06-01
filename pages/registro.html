@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#6366f1">
+  <title>Censo de Mascotas — Registro</title>
+  <link rel="manifest" href="../manifest.json">
+  <link rel="stylesheet" href="../css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+  <div id="offline-bar"><i class="fa-solid fa-wifi-slash"></i> Sin conexión — Registro se guardará localmente</div>
+
+  <div class="login-page">
+    <div class="login-box">
+      <div class="login-logo">
+        <h1><i class="fa-solid fa-map-location-dot"></i><span>Censo</span>Mascotas<i class="fa-solid fa-paw"></i> </h1>
+        <p>Registro de propietario de mascota</p>
+      </div>
+
+      <div class="card">
+        <div id="alert-container"></div>
+
+        <form id="registro-form">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="nombres">Nombres *</label>
+              <input type="text" id="nombres" placeholder="Hugo Armando" required>
+            </div>
+            <div class="form-group">
+              <label for="apellidos">Apellidos *</label>
+              <input type="text" id="apellidos" placeholder="Cristancho Chinome" required>
+            </div>
+            <div class="form-group">
+              <label for="tipoDocumento">Tipo de documento</label>
+              <select id="tipoDocumento">
+                <option value="CC">Cédula de Ciudadanía</option>
+                <option value="CE">Cédula de Extranjería</option>
+                <option value="TI">Tarjeta de Identidad</option>
+                <option value="PA">Pasaporte</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="documento">Número de documento</label>
+              <input type="text" id="documento" placeholder="1000200300">
+            </div>
+            <div class="form-group">
+              <label for="telefono">Teléfono</label>
+              <input type="tel" id="telefono" placeholder="3001234567">
+            </div>
+            <div class="form-group">
+              <label for="ciudad">Ciudad</label>
+              <input type="text" id="ciudad" placeholder="Tunja">
+            </div>
+            <div class="form-group" style="grid-column:1/-1">
+              <label for="direccion">Dirección</label>
+              <input type="text" id="direccion" placeholder="Calle 1 # 2-3, Barrio Centro">
+            </div>
+            <div class="form-group">
+              <label for="usuario">Usuario *</label>
+              <input type="text" id="usuario" placeholder="tu_usuario" autocomplete="username" required>
+            </div>
+            <div class="form-group">
+              <label for="contrasena">Contraseña *</label>
+              <input type="password" id="contrasena" placeholder="••••••••" autocomplete="new-password" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-full" id="btn-registro">
+            Registrarme
+          </button>
+          <div style="margin-top:0.75rem;text-align:center">
+            <span id="badge-pendientes" class="badge badge-offline" style="display:none"></span>
+          </div>
+        </form>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0">
+
+        <p style="font-size:0.8rem;color:var(--text-muted);text-align:center">
+          ¿Ya tienes cuenta?
+          <a href="../index.html" style="color:var(--accent)">Inicia sesión aquí</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/auth.js?v=3"></script>
+  <script src="../js/api.js?v=4"></script>
+  <script src="../js/sync.js?v=3"></script>
+  <script>
+    inicializarMonitorRed();
+    initIndexedDB().then(actualizarBadgePendientes).catch(console.error);
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(console.error);
+
+    document.getElementById('registro-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-registro');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Registrando...';
+
+      const datos = {
+        nombres:       document.getElementById('nombres').value.trim(),
+        apellidos:     document.getElementById('apellidos').value.trim(),
+        tipoDocumento: document.getElementById('tipoDocumento').value,
+        documento:     document.getElementById('documento').value.trim(),
+        telefono:      document.getElementById('telefono').value.trim(),
+        ciudad:        document.getElementById('ciudad').value.trim(),
+        direccion:     document.getElementById('direccion').value.trim(),
+        usuario:       document.getElementById('usuario').value.trim(),
+        contrasena:    document.getElementById('contrasena').value,
+        rol:           'DUENO',
+      };
+
+      if (navigator.onLine) {
+        try {
+          const resultado = await crearPersona(datos);
+          if (resultado?.pendiente) {
+            mostrarAlerta('Sin conexión — Registro guardado localmente y pendiente de sincronización', 'warning');
+          } else {
+            mostrarAlerta('Registro exitoso. Ahora puedes iniciar sesión.', 'success');
+          }
+          setTimeout(() => window.location.href = '../index.html', 2000);
+        } catch (err) {
+          mostrarAlerta(err.message, 'danger');
+        }
+      } else {
+        mostrarAlerta('Sin conexión — El registro se sincronizará cuando recuperes la red.', 'warning');
+        // Guardar en cola offline
+        await guardarEnCola(STORES.PERSONAS, datos);
+        mostrarAlerta('Registro guardado localmente. Inicia sesión cuando tengas conexión.', 'info');
+        setTimeout(() => window.location.href = '../index.html', 2000);
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Registrarme';
+    });
+  </script>
+</body>
+</html>

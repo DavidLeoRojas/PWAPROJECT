@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#6366f1">
+  <title>Censo de Mascotas — Dueños</title>
+  <link rel="manifest" href="../manifest.json">
+  <link rel="stylesheet" href="../css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+  <div id="offline-bar"><i class="fa-solid fa-wifi-slash"></i> Sin conexión — Datos se guardarán localmente</div>
+
+  <nav class="navbar">
+    <a href="mapa.html" class="navbar-brand"><i class="fa-solid fa-map-location-dot"></i> <span>Censo</span>Mascotas<i class="fa-solid fa-paw"></i> </a></i>
+    <ul class="navbar-nav">
+      <li><a href="personas.html" class="nav-link">Personas</a></li>
+      <li><a href="duenos.html" class="nav-link active">Dueños</a></li>
+      <li><a href="mascotas.html" class="nav-link">Mascotas</a></li>
+      <li><a href="censo.html"    class="nav-link">Censo</a></li>
+      <li><a href="mapa.html"     class="nav-link">Mapa</a></li>
+    </ul>
+    <span class="nav-user" id="nav-user-name"></span>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Registro de dueños de mascotas</h1>
+      <p>Este apartado es para registrar a los propietarios de las mascotas que aparecerán en el censo.</p>
+    </div>
+
+    <div id="alert-container"></div>
+
+    <div class="card">
+      <form id="form-persona">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="nombres">Nombres *</label>
+            <input type="text" id="nombres" placeholder="Hugo Armando" required>
+          </div>
+          <div class="form-group">
+            <label for="apellidos">Apellidos *</label>
+            <input type="text" id="apellidos" placeholder="Cristancho Chinome" required>
+          </div>
+          <div class="form-group">
+            <label for="tipoDocumento">Tipo de documento</label>
+            <select id="tipoDocumento">
+              <option value="CC">Cédula de Ciudadanía</option>
+              <option value="CE">Cédula de Extranjería</option>
+              <option value="TI">Tarjeta de Identidad</option>
+              <option value="PA">Pasaporte</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="documento">Número de documento</label>
+            <input type="text" id="documento" placeholder="1000200300">
+          </div>
+          <div class="form-group">
+            <label for="telefono">Teléfono</label>
+            <input type="tel" id="telefono" placeholder="3001234567">
+          </div>
+          <div class="form-group">
+            <label for="ciudad">Ciudad</label>
+            <input type="text" id="ciudad" placeholder="Tunja">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label for="direccion">Dirección</label>
+            <input type="text" id="direccion" placeholder="Calle 1 # 2-3, Barrio Centro">
+          </div>
+          <div class="form-group">
+            <label for="usuario">Usuario (opcional)</label>
+            <input type="text" id="usuario" placeholder="cliente123" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="contrasena">Contraseña (opcional)</label>
+            <input type="password" id="contrasena" placeholder="••••••••" autocomplete="new-password">
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.75rem;margin-top:0.5rem">
+          <button type="submit" class="btn btn-primary" id="btn-guardar">
+            Guardar dueño
+          </button>
+          <button type="reset" class="btn btn-secondary">Limpiar</button>
+        </div>
+      </form>
+    </div>
+
+    <div style="margin-top:2rem">
+      <h2 style="font-size:1.1rem;margin-bottom:1rem;color:var(--text-secondary)">
+        Dueños registrados
+        <span id="badge-pendientes" class="badge badge-offline" style="display:none"></span>
+      </h2>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div id="tabla-personas" style="overflow-x:auto">
+          <p style="padding:1.5rem;color:var(--text-muted);text-align:center">Cargando...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/auth.js?v=3"></script>
+  <script src="../js/api.js?v=4"></script>
+  <script src="../js/sync.js?v=3"></script>
+  <script>
+    requiereAuth();
+    if (!esAdmin()) {
+      window.location.href = 'mapa.html';
+    }
+    mostrarUsuarioNavbar();
+    inicializarMonitorRed();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('../sw.js').catch(console.error);
+    initIndexedDB().then(cargarPersonas);
+
+    async function cargarPersonas() {
+      const contenedor = document.getElementById('tabla-personas');
+      try {
+        const personas = await obtenerPersonas('DUENO');
+        if (personas.length === 0) {
+          contenedor.innerHTML = '<p style="padding:1.5rem;color:var(--text-muted);text-align:center">No hay dueños registrados</p>';
+          return;
+        }
+        contenedor.innerHTML = `
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nombre</th><th>Documento</th><th>Ciudad</th><th>Teléfono</th><th>Usuario</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${personas.map(p => `
+                <tr>
+                  <td>${p.nombres} ${p.apellidos}</td>
+                  <td>${p.tipo_documento || ''} ${p.documento || '—'}</td>
+                  <td>${p.ciudad || '—'}</td>
+                  <td>${p.telefono || '—'}</td>
+                  <td style="font-family:var(--font-mono);font-size:0.8rem">${p.usuario || '—'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>`;
+      } catch {
+        contenedor.innerHTML = '<p style="padding:1.5rem;color:var(--text-muted);text-align:center">Sin conexión — mostrando datos locales</p>';
+      }
+      actualizarBadgePendientes();
+    }
+
+    document.getElementById('form-persona').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btn-guardar');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando...';
+
+      const datos = {
+        id:            crypto.randomUUID(),
+        nombres:       document.getElementById('nombres').value.trim(),
+        apellidos:     document.getElementById('apellidos').value.trim(),
+        tipoDocumento: document.getElementById('tipoDocumento').value,
+        documento:     document.getElementById('documento').value.trim(),
+        telefono:      document.getElementById('telefono').value.trim(),
+        ciudad:        document.getElementById('ciudad').value.trim(),
+        direccion:     document.getElementById('direccion').value.trim(),
+        usuario:       document.getElementById('usuario').value.trim() || null,
+        contrasena:    document.getElementById('contrasena').value || null,
+        rol:           'DUENO',
+      };
+
+      if (navigator.onLine) {
+        try {
+          const resultado = await crearPersona(datos);
+          if (resultado?.pendiente) {
+            mostrarAlerta('Sin conexión — Dueño guardado localmente y pendiente de sincronización', 'warning');
+          } else {
+            mostrarAlerta('Dueño registrado correctamente', 'success');
+          }
+          e.target.reset();
+          cargarPersonas();
+        } catch (err) {
+          mostrarAlerta(err.message, 'danger');
+        }
+      } else {
+        await guardarEnCola(STORES.PERSONAS, datos);
+        mostrarAlerta('Sin conexión — Dueño guardado localmente (se sincronizará al recuperar la red)', 'warning');
+        e.target.reset();
+        actualizarBadgePendientes();
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Guardar dueño';
+    });
+  </script>
+</body>
+</html>
