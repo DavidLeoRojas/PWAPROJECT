@@ -1,5 +1,5 @@
 // ── sw.js — Service Worker corregido ────────────────────────────────────────
-const CACHE_NAME = 'censo-mascotas-v6';
+const CACHE_NAME = 'censo-mascotas-v7';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -25,7 +25,7 @@ const ASSETS_TO_CACHE = [
 
 // ── INSTALL ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
-  console.log('[SW] Instalando v6...');
+  console.log('[SW] Instalando v7...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(ASSETS_TO_CACHE))
@@ -35,7 +35,7 @@ self.addEventListener('install', (event) => {
 
 // ── ACTIVATE ─────────────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activado v6');
+  console.log('[SW] Activado v7');
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(
