@@ -74,8 +74,8 @@ function ajustarMenuPorRol(usuario) {
   if (!usuario || usuario.rol !== 'ADMIN') {
     // Ocultar enlaces no permitidos para dueños
     const enlacesNoPermitidos = [
-      'personas.html', 'duenos.html', 'mascotas.html', 'censo.html',
-      '/pages/personas.html', '/pages/duenos.html', '/pages/mascotas.html', '/pages/censo.html'
+      'duenos.html', 'mascotas.html', 'censo.html',
+      '/pages/duenos.html', '/pages/mascotas.html', '/pages/censo.html'
     ];
     enlacesNoPermitidos.forEach(href => {
       const link = document.querySelector(`a[href="${href}"]`);

@@ -11,7 +11,6 @@ const ASSETS_TO_CACHE = [
   './js/geo.js',
   './js/camera.js',
   './js/sync.js',
-  './pages/personas.html',
   './pages/duenos.html',
   './pages/mascotas.html',
   './pages/censo.html',
@@ -120,9 +119,16 @@ self.addEventListener('push', (event) => {
   const cuerpo    = payload.cuerpo  || notif.body   || 'Se registró un nuevo censo de mascotas';
   const icon      = payload.icon    || notif.icon   || 'assets/icons/icon-192.png';
   const badge     = payload.badge   || notif.badge  || 'assets/icons/icon-72.png';
-  const censoId   = payload.censoId || notif.data?.censoId || '';
-  const urlDestino = payload.url    || notif.data?.url
-    || (censoId ? `pages/mapa.html?censoId=${censoId}` : 'pages/mapa.html');
+  const censoId   = payload.censoId
+    || payload.data?.censoId
+    || notif.data?.censoId
+    || payload.id
+    || payload.data?.id
+    || notif.data?.id
+    || '';
+  const urlDestino = payload.url || notif.data?.url
+    || (censoId ? `pages/mapa.html?censoId=${encodeURIComponent(censoId)}` : 'pages/mapa.html');
+  const absoluteDestino = new URL(urlDestino, self.registration.scope).href;
 
   // FIX: una única llamada a showNotification (antes había dos anidadas)
   event.waitUntil(
@@ -131,7 +137,7 @@ self.addEventListener('push', (event) => {
       icon,
       badge,
       vibrate: [200, 100, 200],
-      data:    { url: urlDestino, censoId },
+      data:    { url: absoluteDestino, censoId },
       actions: [
         { action: 'ver',    title: 'Ver censo' },
         { action: 'cerrar', title: 'Cerrar'    },
@@ -148,23 +154,27 @@ self.addEventListener('notificationclick', (event) => {
   const censoId   = event.notification.data?.censoId || '';
   const base      = self.registration.scope;
   const destino   = censoId
-    ? `${base}pages/mapa.html?censoId=${censoId}`
+    ? `${base}pages/mapa.html?censoId=${encodeURIComponent(censoId)}`
     : `${base}pages/mapa.html`;
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Buscar si ya hay una ventana con mapa.html abierta
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (clientList) => {
       const mapaCliente = clientList.find(c => c.url.includes('mapa.html'));
-      if (mapaCliente) {
-        // Ya está abierta: navegar a la URL con censoId y enfocar
-        return mapaCliente.navigate(destino).then(c => c ? c.focus() : mapaCliente.focus());
+      if (mapaCliente && 'navigate' in mapaCliente) {
+        const result = await mapaCliente.navigate(destino);
+        mapaCliente.focus();
+        mapaCliente.postMessage({ tipo: 'NAVIGATE', censoId });
+        return result;
       }
-      // Buscar cualquier ventana de la app y navegar
+
       const appCliente = clientList.find(c => c.url.startsWith(base) && 'navigate' in c);
       if (appCliente) {
-        return appCliente.navigate(destino).then(c => c ? c.focus() : appCliente.focus());
+        const result = await appCliente.navigate(destino);
+        appCliente.focus();
+        appCliente.postMessage({ tipo: 'NAVIGATE', censoId });
+        return result;
       }
-      // No hay ventana abierta: abrir una nueva
+
       return clients.openWindow(destino);
     })
   );

@@ -53,7 +53,6 @@
   <nav class="navbar">
     <a href="mapa.html" class="navbar-brand"><i class="fa-solid fa-map-location-dot"></i> <span>Censo</span>Mascotas<i class="fa-solid fa-paw"></i></a>
     <ul class="navbar-nav">
-      <li><a href="personas.html" class="nav-link">Personas</a></li>
       <li><a href="duenos.html" class="nav-link">Dueños</a></li>
       <li><a href="mascotas.html" class="nav-link">Mascotas</a></li>
       <li><a href="censo.html"    class="nav-link">Censo</a></li>
@@ -101,7 +100,15 @@
     // recargamos los censos para procesar el nuevo ?censoId en la URL.
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('message', (e) => {
-        if (e.data?.tipo === 'NAVIGATE' || e.data?.tipo === 'SYNC_REQUIRED') {
+        if (e.data?.tipo === 'NAVIGATE') {
+          if (e.data.censoId) {
+            const params = new URLSearchParams(location.search);
+            params.set('censoId', e.data.censoId);
+            history.replaceState(null, '', `${location.pathname}?${params}`);
+          }
+          cargarCensos();
+        }
+        if (e.data?.tipo === 'SYNC_REQUIRED') {
           cargarCensos();
         }
       });
@@ -133,7 +140,7 @@
 
       // Si venimos desde una notificación push, resaltar ese censo
       const params  = new URLSearchParams(location.search);
-      const censoIdDestino = params.get('censoId');
+      const censoIdDestino = params.get('censoId') ? String(params.get('censoId')) : '';
 
       try {
         const censos = await obtenerCensos();
