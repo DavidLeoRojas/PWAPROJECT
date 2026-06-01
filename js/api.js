@@ -60,13 +60,18 @@ async function apiFetch(endpoint, options = {}) {
       let errMsg = data?.error || data?.message || `Error ${response.status}`;
       if (Array.isArray(data?.message)) errMsg = data.message.join('. ');
       console.error(`[API] ${response.status} ${url}:`, errMsg, data);
-      throw new Error(errMsg);
+      const error = new Error(errMsg);
+      error.status = response.status;
+      error.payload = data;
+      throw error;
     }
 
     return data;
   } catch (fetchErr) {
     if (fetchErr instanceof TypeError && fetchErr.message.includes('Failed to fetch')) {
-      throw new Error(`Error de conexión: verifica que el servidor esté disponible y permita CORS desde ${window.location.origin}`);
+      const error = new Error(`Error de conexión: verifica que el servidor esté disponible y permita CORS desde ${window.location.origin}`);
+      error.status = -1;
+      throw error;
     }
     throw fetchErr;
   }

@@ -45,6 +45,9 @@
   // 3. Crea la suscripción en el navegador
   // 4. Registra la suscripción en el backend    (POST /push/subscriptions)
   async function suscribir() {
+    if (!navigator.onLine) {
+      throw new Error('No hay conexión. Activa internet antes de suscribirte a notificaciones.');
+    }
     // Pedir permiso
     const permiso = await Notification.requestPermission();
     if (permiso !== 'granted') throw new Error('Permiso de notificaciones denegado por el usuario');
@@ -106,8 +109,22 @@
     btn.style.cssText = 'margin-top:0.5rem;width:100%';
     container.appendChild(btn);
 
+    async function refrescarBoton() {
+      btn.disabled = !navigator.onLine;
+      if (!navigator.onLine) {
+        btn.innerHTML = '<i class="fa-solid fa-bell-slash"></i> Offline';
+        btn.title = 'Activa internet para gestionar notificaciones';
+      } else {
+        btn.title = '';
+        await actualizarBoton(btn);
+      }
+    }
+
+    window.addEventListener('online', refrescarBoton);
+    window.addEventListener('offline', refrescarBoton);
+
     // Reflejar estado actual antes de mostrar
-    await actualizarBoton(btn);
+    await refrescarBoton();
 
     btn.addEventListener('click', async () => {
       btn.disabled = true;

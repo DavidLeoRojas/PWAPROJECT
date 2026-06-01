@@ -106,6 +106,51 @@ if (window.__SYNC_LOADED__) {
       });
     }
 
+    function esErrorPermanente(err) {
+      const msg = err?.message || '';
+      const status = err?.status;
+      if (status === 409) return true;
+      if (status >= 400 && status < 500 && !esErrorConexion(err)) return true;
+      return /must be|should not be|required|invalid|conflict|No fue posible crear/i.test(msg);
+    }
+
+    async function encontrarPersonaExistente(datos) {
+      if (!datos) return null;
+      const documento = datos.documento?.toString().trim();
+      const tipoDocumento = datos.tipoDocumento?.toString().trim();
+      const usuario = datos.usuario?.toString().trim();
+      const telefono = datos.telefono?.toString().trim();
+      if (!documento && !usuario && !telefono) return null;
+
+      try {
+        const personas = await apiFetch('/personas');
+        if (!Array.isArray(personas)) return null;
+        return personas.find((p) => (
+          documento && tipoDocumento && p.documento === documento && p.tipoDocumento === tipoDocumento
+        ) || (
+          usuario && p.usuario === usuario
+        ) || (
+          telefono && p.telefono === telefono
+        )) || null;
+      } catch (e) {
+        console.warn('[SYNC] No se pudo buscar persona existente:', e.message);
+        return null;
+      }
+    }
+
+    async function actualizarReferenciasEnMascotas(oldId, newId) {
+      try {
+        const pendientes = await leerPendientes(STORES.MASCOTAS);
+        for (const mascota of pendientes) {
+          if (mascota.idDueno === oldId) {
+            await guardarEnCola(STORES.MASCOTAS, { ...mascota, idDueno: newId });
+          }
+        }
+      } catch (e) {
+        console.warn('[SYNC] actualizarReferenciasEnMascotas error:', e.message);
+      }
+    }
+
     // ── Leer caché para listado offline ───────────────────────────────────
     async function leerCache(store) {
       await ensureDBReady();
@@ -179,13 +224,14 @@ if (window.__SYNC_LOADED__) {
         // — Personas —
         const personas = await leerPendientes(STORES.PERSONAS);
         for (const persona of personas) {
+          let datos;
           try {
             if (persona._error) {
               console.warn('[SYNC] Persona en error, se omite:', persona.id);
               errores++;
               continue;
             }
-            const { _guardadoEn, ...datos } = persona;
+            ({ _guardadoEn, ...datos } = persona);
             const creado = await crearPersona(datos, { skipQueue: true });
             // Si el servidor devuelve un id diferente, guardar mapeo (acepta id o _id)
             const serverIdP = creado && (creado.id || creado._id);
@@ -198,12 +244,27 @@ if (window.__SYNC_LOADED__) {
             console.log('[SYNC] Persona sincronizada:', persona.id, '->', creado && creado.id ? creado.id : '(sin id)');
           } catch (err) {
             console.error('[SYNC] Error sincronizando persona:', persona.id, err.message);
-            // Si es un error de validación (campo requerido), marcar para revisión
+            if (err?.status === 409) {
+              const existente = await encontrarPersonaExistente(datos);
+              const serverId = existente && (existente.id || existente._id);
+              if (serverId) {
+                idMap[persona.id] = serverId;
+                await actualizarReferenciasEnCensos(persona.id, serverId);
+                await actualizarReferenciasEnMascotas(persona.id, serverId);
+                await eliminarDeCola(STORES.PERSONAS, persona.id);
+                sincronizados++;
+                console.log('[SYNC] Persona conflict resuelto con registro existente:', persona.id, '->', serverId);
+                continue;
+              }
+            }
+
+            const permanente = esErrorPermanente(err);
             try {
-              const msg = err?.message || '';
-              if (/should not be empty|required/i.test(msg)) {
-                await guardarEnCola(STORES.PERSONAS, { ...persona, _error: true, _errorMessage: msg });
+              if (permanente) {
+                await guardarEnCola(STORES.PERSONAS, { ...persona, _error: true, _errorMessage: err.message });
                 console.warn('[SYNC] Persona marcada con _error:', persona.id);
+              } else {
+                console.warn('[SYNC] Persona pendiente por error temporal:', persona.id, err.message);
               }
             } catch (ee) {
               console.warn('[SYNC] No se pudo marcar persona en error:', ee.message);
@@ -228,9 +289,6 @@ if (window.__SYNC_LOADED__) {
             try {
               creado = await crearMascota(datos, { skipQueue: true });
             } catch (errCrear) {
-              // Si el error indica que la fotografía es demasiado grande o no es URL,
-              // intentamos reenviar sin la propiedad 'fotografia'. Esto evita bloquear
-              // toda la cola por una validación del servidor.
               const msg = errCrear?.message || '';
               if (/fotografia must be shorter|fotografia must be a URL|fotografia must be shorter than or equal to/i.test(msg)) {
                 console.warn('[SYNC] crearMascota fallo por fotografia, reintentando sin fotografia:', mascota.id);
@@ -253,13 +311,16 @@ if (window.__SYNC_LOADED__) {
             console.log('[SYNC] Mascota sincronizada:', mascota.id, '->', creado && creado.id ? creado.id : '(sin id)');
           } catch (err) {
             console.error('[SYNC] Error sincronizando mascota:', mascota.id, err.message);
-            // Marcar como error permanente para que el usuario lo revise y evitar
-            // reintentos infinitos que bloqueen otros registros.
-            try {
-              await guardarEnCola(STORES.MASCOTAS, { ...mascota, _error: true, _errorMessage: err.message });
-              console.warn('[SYNC] Mascota marcada con _error:', mascota.id);
-            } catch (ee) {
-              console.warn('[SYNC] No se pudo marcar mascota en error:', ee.message);
+            const permanente = esErrorPermanente(err);
+            if (permanente) {
+              try {
+                await guardarEnCola(STORES.MASCOTAS, { ...mascota, _error: true, _errorMessage: err.message });
+                console.warn('[SYNC] Mascota marcada con _error:', mascota.id);
+              } catch (ee) {
+                console.warn('[SYNC] No se pudo marcar mascota en error:', ee.message);
+              }
+            } else {
+              console.warn('[SYNC] Mascota pendiente por error temporal, se reintentará:', mascota.id, err.message);
             }
             errores++;
           }

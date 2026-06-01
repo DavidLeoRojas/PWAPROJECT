@@ -79,7 +79,7 @@ self.addEventListener('fetch', (event) => {
 
   if (shouldCache) {
     event.respondWith(
-      caches.match(event.request).then((cached) => {
+      caches.match(event.request, { ignoreSearch: true }).then((cached) => {
         if (cached) return cached;
         return fetch(event.request).then((response) => {
           if (response && response.status === 200) {
@@ -89,7 +89,7 @@ self.addEventListener('fetch', (event) => {
           return response;
         }).catch(() => {
           if (event.request.destination === 'document' || url.pathname.endsWith('.html')) {
-            return caches.match('./index.html');
+            return caches.match('./index.html', { ignoreSearch: true });
           }
           return new Response('Sin conexión', { status: 503 });
         });
