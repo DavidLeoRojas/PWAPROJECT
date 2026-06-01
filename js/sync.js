@@ -469,20 +469,7 @@ if (window.__SYNC_LOADED__) {
         // Solo llegamos aquí si hay error de RED real (offline, DNS, CORS total)
         // En ese caso intentamos con no-cors pero verificamos que NO sea opaque vacía
         // usando un timeout para distinguir offline de CORS bloqueado
-        console.warn('[SYNC] comprobarConexionRemote HEAD falló:', e.message);
-
-        // Segundo intento: ping al servidor base
-        try {
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 3000); // timeout 3s
-          await fetch(base.replace(/\/$/, ''), {
-            method: 'GET',
-            mode:   'no-cors',
-            cache:  'no-store',
-            signal: ctrl.signal,
-          });
-          clearTimeout(timer);
-          // Con no-cors, si no lanza excepción = hay red (aunque sea opaque)
+          console.warn('[SYNC] comprobarConexionRemote GET falló:', e.message);
           console.debug('[SYNC] comprobarConexionRemote fallback → online');
           return true;
         } catch (e2) {

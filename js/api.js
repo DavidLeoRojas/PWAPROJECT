@@ -118,7 +118,7 @@ async function obtenerPersonas(rol = '') {
     try {
       const pendientes = await window.leerPendientes(window.STORES?.PERSONAS || 'personas_pendientes');
       const idsExistentes = new Set(personas.map(p => p.id));
-      const pendientesUnicos = pendientes.filter(p => !idsExistentes.has(p.id));
+      const pendientesUnicos = pendientes.filter(p => !idsExistentes.has(p.id) && (!rol || p.rol === rol));
       personas = [...personas, ...pendientesUnicos];
       console.log('[API] obtenerPersonas: +', pendientesUnicos.length, 'pendientes');
     } catch (e) {
@@ -137,6 +137,16 @@ async function crearMascota(datos, { skipQueue = false } = {}) {
   const payloadLimpio = Object.fromEntries(
     Object.entries(payloadRaw).filter(([k, v]) => !k.startsWith('_') && v !== undefined && v !== null)
   );
+
+  if (typeof payloadLimpio.fotografia === 'string') {
+    const esUrl = /^https?:\/\//i.test(payloadLimpio.fotografia);
+    const esDataUrl = payloadLimpio.fotografia.startsWith('data:');
+    if (esDataUrl || payloadLimpio.fotografia.length > 500 || !esUrl) {
+      console.warn('[API] crearMascota: fotografia inválida o demasiado larga, se reemplaza por placeholder URL');
+      payloadLimpio.fotografia = 'https://elprofehugo.online/assets/icons/icon-192.png';
+    }
+  }
+
   console.log('[API] crearMascota payload:', payloadLimpio);
   try {
     return await apiFetch('/mascotas', {
