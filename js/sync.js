@@ -242,10 +242,90 @@ if (window.__SYNC_LOADED__) {
         for (const censo of censos) {
           try {
             const { _guardadoEn, ...datos } = censo;
-            await crearCenso(datos, { skipQueue: true });
-            await eliminarDeCola(STORES.CENSOS, censo.id);
-            sincronizados++;
-            console.log('[SYNC] Censo sincronizado:', censo.id);
+
+            // Intentar crear censo; si falla por 'No existe mascota/dueno',
+            // reintentar creando primero la entidad faltante desde la cola.
+            let intento = 0;
+            const maxIntentos = 2;
+            while (intento < maxIntentos) {
+              intento++;
+              try {
+                await crearCenso(datos, { skipQueue: true });
+                // éxito
+                await eliminarDeCola(STORES.CENSOS, censo.id);
+                sincronizados++;
+                console.log('[SYNC] Censo sincronizado:', censo.id);
+                break;
+              } catch (errCenso) {
+                const msg = errCenso?.message || '';
+                console.warn('[SYNC] crearCenso fallo (intento', intento, '):', msg);
+                // Buscar referencia faltante en el mensaje
+                const faltaMascota = /No existe mascota con id\s*([0-9a-fA-F\-]+)/i.exec(msg);
+                const faltaDueno   = /No existe persona con id\s*([0-9a-fA-F\-]+)/i.exec(msg);
+
+                if (faltaMascota && intento < maxIntentos) {
+                  const missingId = faltaMascota[1];
+                  console.log('[SYNC] Mascota faltante detectada:', missingId, 'intentando crearla desde pendientes');
+                  // Buscar la mascota en la cola de mascotas
+                  const pendientesMasc = await leerPendientes(STORES.MASCOTAS);
+                  const mascotaPend = pendientesMasc.find(m => m.id === missingId);
+                  if (mascotaPend) {
+                    try {
+                      const { _guardadoEn, ...mDatos } = mascotaPend;
+                      // Reusar la misma lógica de creación con reintento de foto
+                      try {
+                        await crearMascota(mDatos, { skipQueue: true });
+                      } catch (errCrearM) {
+                        const msg2 = errCrearM?.message || '';
+                        if (/fotografia must be shorter|fotografia must be a URL|fotografia must be shorter than or equal to/i.test(msg2)) {
+                          const mSinFoto = { ...mDatos };
+                          delete mSinFoto.fotografia;
+                          await crearMascota(mSinFoto, { skipQueue: true });
+                        } else throw errCrearM;
+                      }
+                      // si se creó, eliminar mascota de la cola y continuar reintento censo
+                      await eliminarDeCola(STORES.MASCOTAS, mascotaPend.id);
+                      continue; // reintentar crear el censo
+                    } catch (e) {
+                      console.error('[SYNC] Error creando mascota faltante:', e.message);
+                      break; // salir del while y contabilizar error de censo
+                    }
+                  } else {
+                    console.warn('[SYNC] Mascota faltante no encontrada en pendientes:', missingId);
+                    break;
+                  }
+                } else if (faltaDueno && intento < maxIntentos) {
+                  const missingId = faltaDueno[1];
+                  console.log('[SYNC] Persona faltante detectada:', missingId, 'intentando crearla desde pendientes');
+                  const pendientesPers = await leerPendientes(STORES.PERSONAS);
+                  const personaPend = pendientesPers.find(p => p.id === missingId);
+                  if (personaPend) {
+                    try {
+                      const { _guardadoEn, ...pDatos } = personaPend;
+                      await crearPersona(pDatos, { skipQueue: true });
+                      await eliminarDeCola(STORES.PERSONAS, personaPend.id);
+                      continue; // reintentar crear el censo
+                    } catch (e) {
+                      console.error('[SYNC] Error creando persona faltante:', e.message);
+                      break;
+                    }
+                  } else {
+                    console.warn('[SYNC] Persona faltante no encontrada en pendientes:', missingId);
+                    break;
+                  }
+                } else {
+                  // Error distinto o máximos intentos alcanzados
+                  throw errCenso;
+                }
+              }
+            }
+            // Si salimos del while sin romper por éxito, comprobar si el censo fue creado
+            // Si no se eliminó de la cola, contamos como error
+            const existe = await leerPendientes(STORES.CENSOS);
+            if (existe.find(x => x.id === censo.id)) {
+              console.error('[SYNC] Error sincronizando censo (persistente):', censo.id);
+              errores++;
+            }
           } catch (err) {
             console.error('[SYNC] Error sincronizando censo:', censo.id, err.message);
             errores++;
