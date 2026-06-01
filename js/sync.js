@@ -154,51 +154,103 @@ if (window.__SYNC_LOADED__) {
       let sincronizados = 0;
       let errores       = 0;
 
+      // Mapa temporal localId -> serverId para resolver referencias en censos
+      const idMap = {};
+
+      // Helper: actualizar censos pendientes reemplazando ids locales por server ids
+      async function actualizarReferenciasEnCensos(oldId, newId) {
+        try {
+          const pendientes = await leerPendientes(STORES.CENSOS);
+          for (const c of pendientes) {
+            let modificado = false;
+            const registro = { ...c };
+            if (registro.idMascota === oldId) { registro.idMascota = newId; modificado = true; }
+            if (registro.idDueno   === oldId) { registro.idDueno   = newId; modificado = true; }
+            if (modificado) {
+                await guardarEnCola(STORES.CENSOS, registro);
+              }
+          }
+        } catch (e) {
+          console.warn('[SYNC] actualizarReferenciasEnCensos error:', e.message);
+        }
+      }
+
       try {
-      // — Personas —
-      const personas = await leerPendientes(STORES.PERSONAS);
-      for (const persona of personas) {
-        try {
-          const { _guardadoEn, ...datos } = persona;
-          await crearPersona(datos, { skipQueue: true });
-          await eliminarDeCola(STORES.PERSONAS, persona.id);
-          sincronizados++;
-          console.log('[SYNC] Persona sincronizada:', persona.id);
-        } catch (err) {
-          console.error('[SYNC] Error sincronizando persona:', persona.id, err.message);
-          errores++;
+        // — Personas —
+        const personas = await leerPendientes(STORES.PERSONAS);
+        for (const persona of personas) {
+          try {
+            const { _guardadoEn, ...datos } = persona;
+            const creado = await crearPersona(datos, { skipQueue: true });
+            // Si el servidor devuelve un id diferente, guardar mapeo
+            if (creado && creado.id && creado.id !== persona.id) {
+              idMap[persona.id] = creado.id;
+              await actualizarReferenciasEnCensos(persona.id, creado.id);
+            }
+            await eliminarDeCola(STORES.PERSONAS, persona.id);
+            sincronizados++;
+            console.log('[SYNC] Persona sincronizada:', persona.id, '->', creado && creado.id ? creado.id : '(sin id)');
+          } catch (err) {
+            console.error('[SYNC] Error sincronizando persona:', persona.id, err.message);
+            errores++;
+          }
         }
-      }
 
-      // — Mascotas —
-      const mascotas = await leerPendientes(STORES.MASCOTAS);
-      for (const mascota of mascotas) {
-        try {
-          const { _guardadoEn, ...datos } = mascota;
-          await crearMascota(datos, { skipQueue: true });
-          await eliminarDeCola(STORES.MASCOTAS, mascota.id);
-          sincronizados++;
-          console.log('[SYNC] Mascota sincronizada:', mascota.id);
-        } catch (err) {
-          console.error('[SYNC] Error sincronizando mascota:', mascota.id, err.message);
-          errores++;
-        }
-      }
+        // — Mascotas —
+        const mascotas = await leerPendientes(STORES.MASCOTAS);
+        for (const mascota of mascotas) {
+          try {
+            const { _guardadoEn, ...datos } = mascota;
 
-      // — Censos —
-      const censos = await leerPendientes(STORES.CENSOS);
-      for (const censo of censos) {
-        try {
-          const { _guardadoEn, ...datos } = censo;
-          await crearCenso(datos, { skipQueue: true });
-          await eliminarDeCola(STORES.CENSOS, censo.id);
-          sincronizados++;
-          console.log('[SYNC] Censo sincronizado:', censo.id);
-        } catch (err) {
-          console.error('[SYNC] Error sincronizando censo:', censo.id, err.message);
-          errores++;
+            // Intento normal
+            let creado;
+            try {
+              creado = await crearMascota(datos, { skipQueue: true });
+            } catch (errCrear) {
+              // Si el error indica que la fotografía es demasiado grande o no es URL,
+              // intentamos reenviar sin la propiedad 'fotografia'. Esto evita bloquear
+              // toda la cola por una validación del servidor.
+              const msg = errCrear?.message || '';
+              if (/fotografia must be shorter|fotografia must be a URL|fotografia must be shorter than or equal to/i.test(msg)) {
+                console.warn('[SYNC] crearMascota fallo por fotografia, reintentando sin fotografia:', mascota.id);
+                const datosSinFoto = { ...datos };
+                delete datosSinFoto.fotografia;
+                creado = await crearMascota(datosSinFoto, { skipQueue: true });
+              } else {
+                throw errCrear;
+              }
+            }
+
+            if (creado && creado.id && creado.id !== mascota.id) {
+              idMap[mascota.id] = creado.id;
+              await actualizarReferenciasEnCensos(mascota.id, creado.id);
+            }
+
+            await eliminarDeCola(STORES.MASCOTAS, mascota.id);
+            sincronizados++;
+            console.log('[SYNC] Mascota sincronizada:', mascota.id, '->', creado && creado.id ? creado.id : '(sin id)');
+          } catch (err) {
+            console.error('[SYNC] Error sincronizando mascota:', mascota.id, err.message);
+            errores++;
+          }
         }
-      }
+
+        // — Censos —
+        // Antes de enviar, leer de nuevo los censos pendientes (pueden haber sido
+        // actualizados por referencias anteriores) y enviarlos.
+        const censos = await leerPendientes(STORES.CENSOS);
+        for (const censo of censos) {
+          try {
+            const { _guardadoEn, ...datos } = censo;
+            await crearCenso(datos, { skipQueue: true });
+            await eliminarDeCola(STORES.CENSOS, censo.id);
+            sincronizados++;
+            console.log('[SYNC] Censo sincronizado:', censo.id);
+          } catch (err) {
+            console.error('[SYNC] Error sincronizando censo:', censo.id, err.message);
+            errores++;
+          }
+        }
 
       } finally {
         _sincronizando = false;
