@@ -79,19 +79,22 @@ self.addEventListener('fetch', (event) => {
 
   if (shouldCache) {
     event.respondWith(
-      caches.match(event.request, { ignoreSearch: true }).then((cached) => {
+      caches.match(event.request).then((cached) => {
         if (cached) return cached;
-        return fetch(event.request).then((response) => {
-          if (response && response.status === 200) {
-            const responseParaCache = response.clone();
-            caches.open(CACHE_NAME).then(c => c.put(event.request, responseParaCache));
-          }
-          return response;
-        }).catch(() => {
-          if (event.request.destination === 'document' || url.pathname.endsWith('.html')) {
-            return caches.match('./index.html', { ignoreSearch: true });
-          }
-          return new Response('Sin conexión', { status: 503 });
+        return caches.match(event.request, { ignoreSearch: true }).then((fallbackCached) => {
+          if (fallbackCached) return fallbackCached;
+          return fetch(event.request).then((response) => {
+            if (response && response.status === 200) {
+              const responseParaCache = response.clone();
+              caches.open(CACHE_NAME).then(c => c.put(event.request, responseParaCache));
+            }
+            return response;
+          }).catch(() => {
+            if (event.request.destination === 'document' || url.pathname.endsWith('.html')) {
+              return caches.match('./index.html', { ignoreSearch: true });
+            }
+            return new Response('Sin conexión', { status: 503 });
+          });
         });
       })
     );
