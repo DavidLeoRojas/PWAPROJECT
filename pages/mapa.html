@@ -51,7 +51,7 @@
   <div id="offline-bar"><i class="fa-solid fa-wifi-slash"></i> Sin conexión — Mostrando datos del caché</div>
 
   <nav class="navbar">
-    <a href="mapa.html" class="navbar-brand"><i class="fa-solid fa-map-location-dot"></i></i> <span>Censo</span>Mascotas<i class="fa-solid fa-paw"></i> </a>
+    <a href="mapa.html" class="navbar-brand"><i class="fa-solid fa-map-location-dot"></i> <span>Censo</span>Mascotas<i class="fa-solid fa-paw"></i></a>
     <ul class="navbar-nav">
       <li><a href="personas.html" class="nav-link">Personas</a></li>
       <li><a href="duenos.html" class="nav-link">Dueños</a></li>
@@ -161,7 +161,7 @@
 
         // Si hay un censo destino (desde notificación), centrarlo y abrirlo
         if (marcadorDestino && censoDestino) {
-          map.setView([parseFloat(censoDestino.lat), parseFloat(censoDestino.lon)], 17);
+          map.flyTo([parseFloat(censoDestino.lat), parseFloat(censoDestino.lon)], 17, { duration: 1 });
           marcadorDestino.openPopup();
           mostrarInfoPanel(censoDestino);
         } else if (bounds.length === 1) {

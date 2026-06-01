@@ -67,6 +67,7 @@ function mostrarUsuarioNavbar() {
     el.textContent = `${u.nombres} ${u.apellidos}${rolVisible}`;
   }
   ajustarMenuPorRol(u);
+  inicializarMenuMovil();
 }
 
 function ajustarMenuPorRol(usuario) {
@@ -85,6 +86,32 @@ function ajustarMenuPorRol(usuario) {
       }
     });
   }
+}
+
+function inicializarMenuMovil() {
+  const nav = document.querySelector('.navbar');
+  if (!nav || nav.querySelector('.navbar-toggle')) return;
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'navbar-toggle';
+  button.setAttribute('aria-label', 'Mostrar menú');
+  button.innerHTML = '<span></span><span></span><span></span>';
+  button.addEventListener('click', () => nav.classList.toggle('collapsed'));
+
+  const brand = nav.querySelector('.navbar-brand');
+  nav.insertBefore(button, brand ? brand.nextSibling : nav.firstChild);
+
+  const navLinks = nav.querySelectorAll('.nav-link');
+  navLinks.forEach((link) => {
+    link.addEventListener('click', () => nav.classList.remove('collapsed'));
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!nav.contains(event.target) && nav.classList.contains('collapsed')) {
+      nav.classList.remove('collapsed');
+    }
+  });
 }
 
 function esAdmin() {

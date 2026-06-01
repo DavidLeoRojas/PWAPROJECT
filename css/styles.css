@@ -770,6 +770,53 @@ select option {
     flex-wrap: wrap;
   }
 
+  .navbar-toggle {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 42px;
+
+    height: 42px;
+
+    border: 1px solid rgba(255,255,255,0.16);
+
+    border-radius: 14px;
+
+    background: rgba(255,255,255,0.08);
+
+    color: var(--white);
+
+    cursor: pointer;
+
+    transition: 0.25s ease;
+
+    margin-left: auto;
+  }
+
+  .navbar-toggle:hover {
+
+    background: rgba(255,255,255,0.16);
+  }
+
+  .navbar-toggle span {
+
+    display: block;
+
+    width: 18px;
+
+    height: 2px;
+
+    margin: 3px 0;
+
+    background: var(--white);
+
+    border-radius: 999px;
+  }
+
   .navbar-nav {
 
     width: 100%;
@@ -779,6 +826,11 @@ select option {
     justify-content: center;
 
     margin-top: 0.75rem;
+  }
+
+  .navbar.collapsed .navbar-nav {
+
+    display: none;
   }
 
   .container {
