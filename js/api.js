@@ -93,15 +93,31 @@ async function crearPersona(datos, { skipQueue = false } = {}) {
 
 async function obtenerPersonas(rol = '') {
   const endpoint = `/personas${rol ? `?rol=${encodeURIComponent(rol)}` : ''}`;
+  let personas = [];
+  
   try {
-    const personas = await apiFetch(endpoint);
+    personas = await apiFetch(endpoint);
     if (typeof guardarCache === 'function')
       guardarCache(CACHE_STORES.PERSONAS, Array.isArray(personas) ? personas : []);
-    return personas;
   } catch (err) {
     console.warn('[API] obtenerPersonas fallback offline:', err.message);
-    return obtenerCacheOffline(CACHE_STORES.PERSONAS, window.STORES?.PERSONAS || 'personas_pendientes');
+    personas = await obtenerCacheOffline(CACHE_STORES.PERSONAS, window.STORES?.PERSONAS || 'personas_pendientes');
   }
+  
+  // ── Agregar pendientes (no duplicados) ──────────────────────────────────
+  if (typeof window?.leerPendientes === 'function') {
+    try {
+      const pendientes = await window.leerPendientes(window.STORES?.PERSONAS || 'personas_pendientes');
+      const idsExistentes = new Set(personas.map(p => p.id));
+      const pendientesUnicos = pendientes.filter(p => !idsExistentes.has(p.id));
+      personas = [...personas, ...pendientesUnicos];
+      console.log('[API] obtenerPersonas: +', pendientesUnicos.length, 'pendientes');
+    } catch (e) {
+      console.warn('[API] Error leyendo pendientes de personas:', e.message);
+    }
+  }
+  
+  return Array.isArray(personas) ? personas : [];
 }
 
 // ═══ MASCOTAS ════════════════════════════════════════════════════════════════
@@ -128,15 +144,31 @@ async function crearMascota(datos, { skipQueue = false } = {}) {
 }
 
 async function obtenerMascotas() {
+  let mascotas = [];
+  
   try {
-    const mascotas = await apiFetch('/mascotas');
+    mascotas = await apiFetch('/mascotas');
     if (typeof guardarCache === 'function')
       guardarCache(CACHE_STORES.MASCOTAS, Array.isArray(mascotas) ? mascotas : []);
-    return mascotas;
   } catch (err) {
     console.warn('[API] obtenerMascotas fallback offline:', err.message);
-    return obtenerCacheOffline(CACHE_STORES.MASCOTAS, window.STORES?.MASCOTAS || 'mascotas_pendientes');
+    mascotas = await obtenerCacheOffline(CACHE_STORES.MASCOTAS, window.STORES?.MASCOTAS || 'mascotas_pendientes');
   }
+  
+  // ── Agregar pendientes (no duplicados) ──────────────────────────────────
+  if (typeof window?.leerPendientes === 'function') {
+    try {
+      const pendientes = await window.leerPendientes(window.STORES?.MASCOTAS || 'mascotas_pendientes');
+      const idsExistentes = new Set(mascotas.map(m => m.id));
+      const pendientesUnicos = pendientes.filter(m => !idsExistentes.has(m.id));
+      mascotas = [...mascotas, ...pendientesUnicos];
+      console.log('[API] obtenerMascotas: +', pendientesUnicos.length, 'pendientes');
+    } catch (e) {
+      console.warn('[API] Error leyendo pendientes de mascotas:', e.message);
+    }
+  }
+  
+  return Array.isArray(mascotas) ? mascotas : [];
 }
 
 // ═══ CENSOS ══════════════════════════════════════════════════════════════════
@@ -170,15 +202,31 @@ async function crearCenso(datos, { skipQueue = false } = {}) {
 }
 
 async function obtenerCensos() {
+  let censos = [];
+  
   try {
-    const censos = await apiFetch('/censos');
+    censos = await apiFetch('/censos');
     if (typeof guardarCache === 'function')
       guardarCache(CACHE_STORES.CENSOS, Array.isArray(censos) ? censos : []);
-    return censos;
   } catch (err) {
     console.warn('[API] obtenerCensos fallback offline:', err.message);
-    return obtenerCacheOffline(CACHE_STORES.CENSOS, window.STORES?.CENSOS || 'censos_pendientes');
+    censos = await obtenerCacheOffline(CACHE_STORES.CENSOS, window.STORES?.CENSOS || 'censos_pendientes');
   }
+  
+  // ── Agregar pendientes (no duplicados) ──────────────────────────────────
+  if (typeof window?.leerPendientes === 'function') {
+    try {
+      const pendientes = await window.leerPendientes(window.STORES?.CENSOS || 'censos_pendientes');
+      const idsExistentes = new Set(censos.map(c => c.id));
+      const pendientesUnicos = pendientes.filter(c => !idsExistentes.has(c.id));
+      censos = [...censos, ...pendientesUnicos];
+      console.log('[API] obtenerCensos: +', pendientesUnicos.length, 'pendientes');
+    } catch (e) {
+      console.warn('[API] Error leyendo pendientes de censos:', e.message);
+    }
+  }
+  
+  return Array.isArray(censos) ? censos : [];
 }
 
 // ═══ PUSH ════════════════════════════════════════════════════════════════════
