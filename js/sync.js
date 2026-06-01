@@ -151,6 +151,30 @@ if (window.__SYNC_LOADED__) {
       }
     }
 
+    async function encontrarMascotaExistente(datos) {
+      if (!datos || !datos.nombre) return null;
+      const nombre = datos.nombre?.toString().trim();
+      const tipo = datos.tipo?.toString().trim();
+      const genero = datos.genero?.toString().trim();
+      const edad = datos.edad != null ? Number(datos.edad) : null;
+      if (!nombre) return null;
+
+      try {
+        const mascotas = await apiFetch('/mascotas');
+        if (!Array.isArray(mascotas)) return null;
+        return mascotas.find((m) => {
+          if (m.nombre !== nombre) return false;
+          if (tipo && m.tipo !== tipo) return false;
+          if (genero && m.genero !== genero) return false;
+          if (edad != null && Number(m.edad) !== edad) return false;
+          return true;
+        }) || null;
+      } catch (e) {
+        console.warn('[SYNC] No se pudo buscar mascota existente:', e.message);
+        return null;
+      }
+    }
+
     // ── Leer caché para listado offline ───────────────────────────────────
     async function leerCache(store) {
       await ensureDBReady();
@@ -243,7 +267,7 @@ if (window.__SYNC_LOADED__) {
             sincronizados++;
             console.log('[SYNC] Persona sincronizada:', persona.id, '->', creado && creado.id ? creado.id : '(sin id)');
           } catch (err) {
-            console.error('[SYNC] Error sincronizando persona:', persona.id, err.message);
+            console.error('[SYNC] Error sincronizando persona:', persona.id, err.status, err.message, err.payload || '');
             if (err?.status === 409) {
               const existente = await encontrarPersonaExistente(datos);
               const serverId = existente && (existente.id || existente._id);
@@ -310,7 +334,20 @@ if (window.__SYNC_LOADED__) {
             sincronizados++;
             console.log('[SYNC] Mascota sincronizada:', mascota.id, '->', creado && creado.id ? creado.id : '(sin id)');
           } catch (err) {
-            console.error('[SYNC] Error sincronizando mascota:', mascota.id, err.message);
+            console.error('[SYNC] Error sincronizando mascota:', mascota.id, err.status, err.message, err.payload || '');
+            if (err?.status === 409) {
+              const existente = await encontrarMascotaExistente(datos);
+              const serverId = existente && (existente.id || existente._id);
+              if (serverId) {
+                idMap[mascota.id] = serverId;
+                await actualizarReferenciasEnCensos(mascota.id, serverId);
+                await eliminarDeCola(STORES.MASCOTAS, mascota.id);
+                sincronizados++;
+                console.log('[SYNC] Mascota conflict resuelta con registro existente:', mascota.id, '->', serverId);
+                continue;
+              }
+            }
+
             const permanente = esErrorPermanente(err);
             if (permanente) {
               try {
@@ -417,17 +454,15 @@ if (window.__SYNC_LOADED__) {
         : window.__API_BASE__ || window.DEFAULT_API_BASE);
       if (!base) return false;
 
-      // Usamos un endpoint que siempre responde sin importar autenticación.
-      // Cualquier respuesta HTTP (incluso 401, 403, 404) significa que hay red.
-      // Solo un error de red (TypeError: Failed to fetch) significa offline real.
-      const pruebaUrl = `${base.replace(/\/$/, '')}/auth/login`;
+      // Usamos un endpoint conocido que existe en el servidor.
+      // Cualquier respuesta HTTP (incluso 401, 403) significa que hay red.
+      const pruebaUrl = `${base.replace(/\/$/, '')}/mascotas`;
       try {
         await fetch(pruebaUrl, {
-          method: 'HEAD',   // no descarga body, solo verifica conexión
+          method: 'GET',
           mode:   'cors',
           cache:  'no-store',
         });
-        // Si llegamos aquí (con o sin error HTTP) hay conexión
         console.debug('[SYNC] comprobarConexionRemote → online');
         return true;
       } catch (e) {
