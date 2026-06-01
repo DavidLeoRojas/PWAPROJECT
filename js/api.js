@@ -75,7 +75,11 @@ async function apiFetch(endpoint, options = {}) {
 // ═══ PERSONAS ════════════════════════════════════════════════════════════════
 // FIX: se acepta opción { skipQueue } para evitar re-encolar durante sincronización
 async function crearPersona(datos, { skipQueue = false } = {}) {
-  const { id, ...payload } = datos || {};
+  const { id, ...payloadRaw } = datos || {};
+  // Sanitize payload: remove internal fields (starting with '_') and null/undefined
+  const payload = Object.fromEntries(
+    Object.entries(payloadRaw).filter(([k, v]) => !k.startsWith('_') && v !== undefined && v !== null)
+  );
   try {
     return await apiFetch('/personas/registro', {
       method: 'POST',
@@ -123,9 +127,10 @@ async function obtenerPersonas(rol = '') {
 // ═══ MASCOTAS ════════════════════════════════════════════════════════════════
 // FIX: se acepta opción { skipQueue } para evitar re-encolar durante sincronización
 async function crearMascota(datos, { skipQueue = false } = {}) {
-  const { id, ...payload } = datos || {};
+  const { id, ...payloadRaw } = datos || {};
+  // Sanitize payload: remove internal fields (starting with '_') and null/undefined
   const payloadLimpio = Object.fromEntries(
-    Object.entries(payload).filter(([_, v]) => v !== undefined && v !== null)
+    Object.entries(payloadRaw).filter(([k, v]) => !k.startsWith('_') && v !== undefined && v !== null)
   );
   console.log('[API] crearMascota payload:', payloadLimpio);
   try {
@@ -177,7 +182,11 @@ async function obtenerMascotas() {
 //      (se guardaron junto con el censo en censo.html), así no dependemos de
 //      getProyectoConfig() en contextos donde puede no estar disponible.
 async function crearCenso(datos, { skipQueue = false } = {}) {
-  const { id, ...payload } = datos || {};
+  const { id, ...payloadRaw } = datos || {};
+  // Sanitize payload: remove internal fields and null/undefined
+  const payload = Object.fromEntries(
+    Object.entries(payloadRaw).filter(([k, v]) => !k.startsWith('_') && v !== undefined && v !== null)
+  );
 
   // Si idProyecto/color no vienen en datos (llamada directa desde el formulario),
   // los tomamos de getProyectoConfig() como antes.

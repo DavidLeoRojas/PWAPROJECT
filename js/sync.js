@@ -180,6 +180,11 @@ if (window.__SYNC_LOADED__) {
         const personas = await leerPendientes(STORES.PERSONAS);
         for (const persona of personas) {
           try {
+            if (persona._error) {
+              console.warn('[SYNC] Persona en error, se omite:', persona.id);
+              errores++;
+              continue;
+            }
             const { _guardadoEn, ...datos } = persona;
             const creado = await crearPersona(datos, { skipQueue: true });
             // Si el servidor devuelve un id diferente, guardar mapeo (acepta id o _id)
@@ -193,6 +198,16 @@ if (window.__SYNC_LOADED__) {
             console.log('[SYNC] Persona sincronizada:', persona.id, '->', creado && creado.id ? creado.id : '(sin id)');
           } catch (err) {
             console.error('[SYNC] Error sincronizando persona:', persona.id, err.message);
+            // Si es un error de validación (campo requerido), marcar para revisión
+            try {
+              const msg = err?.message || '';
+              if (/should not be empty|required/i.test(msg)) {
+                await guardarEnCola(STORES.PERSONAS, { ...persona, _error: true, _errorMessage: msg });
+                console.warn('[SYNC] Persona marcada con _error:', persona.id);
+              }
+            } catch (ee) {
+              console.warn('[SYNC] No se pudo marcar persona en error:', ee.message);
+            }
             errores++;
           }
         }
@@ -201,6 +216,11 @@ if (window.__SYNC_LOADED__) {
         const mascotas = await leerPendientes(STORES.MASCOTAS);
         for (const mascota of mascotas) {
           try {
+            if (mascota._error) {
+              console.warn('[SYNC] Mascota en error, se omite:', mascota.id);
+              errores++;
+              continue;
+            }
             const { _guardadoEn, ...datos } = mascota;
 
             // Intento normal
